@@ -1,4 +1,4 @@
-crewai[google-genai]
+crewai
 google-genai
 python-dotenv
 playwright

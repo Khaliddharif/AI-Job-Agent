@@ -1,4 +1,9 @@
 import os
+# Disable CrewAI telemetry to prevent the "signal only works in main thread" error
+os.environ["OTEL_SDK_DISABLED"] = "true"
+os.environ["PYDANTIC_SKIP_VALIDATING_CORE_SCHEMAS"] = "true"
+import streamlit as st
+from crewai import Agent, Task, Crew, LLM
 import json
 import streamlit as st
 from dotenv import load_dotenv
@@ -6,18 +11,16 @@ from crewai import Agent, Task, Crew, LLM
 from PyPDF2 import PdfReader
 from markdown_pdf import MarkdownPdf, Section
 
-# Load environment variables
-load_dotenv()
-
-# Configure Gemini LLM
-gemini_llm = LLM(
-    model="gemini/gemini-3-flash-preview", 
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+# This transfers Streamlit Secrets into Environment Variables for CrewAI
+if "GEMINI_API_KEY" in st.secrets:
+    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+if "GOOGLE_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 class ResumeIntelligence:
     def __init__(self, pdf_file):
         self.resume_text = self._read_pdf(pdf_file)
+        self.gemini_llm = LLM(model="gemini-1.5-flash", api_key=os.environ.get("GEMINI_API_KEY"))
 
     def _read_pdf(self, file):
         reader = PdfReader(file)
@@ -29,7 +32,7 @@ class ResumeIntelligence:
             role='ATS Scorer',
             goal=f'Evaluate Khalid Dharif against {job_url} and provide numerical KPIs.',
             backstory='Expert in recruitment analytics and ATS algorithms.',
-            llm=gemini_llm,
+            llm=self.gemini_llm,
             verbose=True
         )
 
@@ -38,7 +41,7 @@ class ResumeIntelligence:
             role=f'Modern {target_role} Architect',
             goal=f'Rewrite Khalid\'s resume for a {target_role} role using the Modern Template.',
             backstory='Specializes in high-impact formatting for Data and Finance roles.',
-            llm=gemini_llm,
+            llm=self.gemini_llm,
             verbose=True
         )
 
