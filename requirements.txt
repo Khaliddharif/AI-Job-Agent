@@ -1,0 +1,7 @@
+crewai[google-genai]
+google-genai
+python-dotenv
+playwright
+pypdf2
+markdown-pdf
+streamlit
