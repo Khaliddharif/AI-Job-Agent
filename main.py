@@ -20,7 +20,7 @@ if "GOOGLE_API_KEY" in st.secrets:
 class ResumeIntelligence:
     def __init__(self, pdf_file):
         self.resume_text = self._read_pdf(pdf_file)
-        self.gemini_llm = LLM(model="gemini-1.5-flash", api_key=os.environ.get("GEMINI_API_KEY"))
+        self.gemini_llm = LLM(model="gemini/gemini-flash-latest", api_key=os.environ.get("GEMINI_API_KEY"))
 
     def _read_pdf(self, file):
         reader = PdfReader(file)
