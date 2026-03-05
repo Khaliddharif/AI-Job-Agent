@@ -67,6 +67,13 @@ CV_TEMPLATES = {
         "style": "modern_tech",
         "icon": "💻",
         "best_for": "Software Engineers, DevOps, Cloud Architects"
+    },
+    "Compact Custom": {
+        "description": "One-Page compact layout based on clean center-aligned header and inline skills",
+        "color": "#333333",
+        "style": "compact_custom", 
+        "icon": "📄",
+        "best_for": "Consultants, Analysts, 1-page limits"
     }
 }
 
@@ -393,6 +400,25 @@ class TemplateGenerator:
         
         docx_temp_js = os.path.join(os.getcwd(), "resume.docx").replace('\\', '\\\\')
         
+        is_compact = style == 'compact_custom'
+        
+        # Adjust styles based on template
+        # Base font sizes
+        header1_size = 40 if is_compact else 52
+        header2_size = 24 if is_compact else 28
+        header3_size = 20 if is_compact else 24
+        contact_size = 18 if is_compact else 20
+        body_size = 20 if is_compact else 22
+        
+        # Spacing
+        h1_after = 60 if is_compact else 100
+        h2_before = 120 if is_compact else 240
+        h2_after = 60 if is_compact else 120
+        h3_before = 80 if is_compact else 120
+        h3_after = 40 if is_compact else 60
+        section_space = 120 if is_compact else 200
+        item_space = 60 if is_compact else 120
+        
         js_code = f'''
 const {{ Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, LevelFormat }} = require('docx');
 const fs = require('fs');
@@ -426,32 +452,32 @@ const resumeData = {{
 const doc = new Document({{
     styles: {{
         default: {{
-            document: {{ run: {{ font: "Arial", size: 22 }} }}
+            document: {{ run: {{ font: "Arial", size: {body_size} }} }}
         }},
         paragraphStyles: [
             {{
                 id: "Heading1",
                 name: "Heading 1",
-                run: {{ size: 52, bold: true, color: primaryColor, font: "Arial" }},
-                paragraph: {{ spacing: {{ before: 0, after: 100 }}, outlineLevel: 0, alignment: AlignmentType.CENTER }}
+                run: {{ size: {header1_size}, bold: true, color: primaryColor, font: "Arial" }},
+                paragraph: {{ spacing: {{ before: 0, after: {h1_after} }}, outlineLevel: 0, alignment: AlignmentType.CENTER }}
             }},
             {{
                 id: "Heading2",
                 name: "Heading 2",
-                run: {{ size: 28, bold: true, color: primaryColor, font: "Arial" }},
-                paragraph: {{ spacing: {{ before: 240, after: 120 }}, outlineLevel: 1 }}
+                run: {{ size: {header2_size}, bold: true, color: primaryColor, font: "Arial" }},
+                paragraph: {{ spacing: {{ before: {h2_before}, after: {h2_after} }}, outlineLevel: 1 }}
             }},
             {{
                 id: "Heading3",
                 name: "Heading 3",
-                run: {{ size: 24, bold: true, font: "Arial" }},
-                paragraph: {{ spacing: {{ before: 120, after: 60 }}, outlineLevel: 2 }}
+                run: {{ size: {header3_size}, bold: true, font: "Arial" }},
+                paragraph: {{ spacing: {{ before: {h3_before}, after: {h3_after} }}, outlineLevel: 2 }}
             }},
             {{
                 id: "SubHeading",
                 name: "Sub Heading",
-                run: {{ size: 20, bold: true, color: "666666", font: "Arial", italics: true }},
-                paragraph: {{ spacing: {{ before: 100, after: 80 }} }}
+                run: {{ size: {body_size}, bold: true, color: "111111", font: "Arial", italics: true }},
+                paragraph: {{ spacing: {{ before: 60, after: 40 }} }}
             }}
         ]
     }},
@@ -475,7 +501,7 @@ const doc = new Document({{
         properties: {{
             page: {{
                 size: {{ width: 12240, height: 15840 }},
-                margin: {{ top: 1440, right: 1440, bottom: 1440, left: 1440 }}
+                margin: {{ top: 1000, right: 1000, bottom: 1000, left: 1000 }} // Narrower margins for compact
             }}
         }},
         children: [
@@ -499,7 +525,7 @@ const doc = new Document({{
                             resumeData.contact.portfolio ? `🔗 ${{resumeData.contact.portfolio}}` : '',
                             resumeData.contact.linkedin ? `🔗 ${{resumeData.contact.linkedin}}` : ''
                         ].filter(x => x).join(' | '),
-                        size: 20
+                        size: {contact_size}
                     }})
                 ]
             }}),
@@ -513,7 +539,7 @@ const doc = new Document({{
                         new TextRun({{
                             text: resumeData.title,
                             bold: true,
-                            size: 24,
+                            size: {header3_size},
                             color: primaryColor
                         }})
                     ]
@@ -527,7 +553,7 @@ const doc = new Document({{
             }}),
             new Paragraph({{
                 children: [new TextRun(resumeData.summary)],
-                spacing: {{ after: 200 }}
+                spacing: {{ after: section_space }}
             }}),
             
             // CORE SKILLS SECTION
@@ -539,72 +565,56 @@ const doc = new Document({{
             // Data & AI Skills
             ...(resumeData.skills.dataAI.length > 0 ? [
                 new Paragraph({{
-                    style: "SubHeading",
-                    children: [new TextRun("Data & AI")]
-                }}),
-                ...resumeData.skills.dataAI.map(skill =>
-                    new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(skill)]
-                    }})
-                )
+                    children: [
+                        new TextRun({{ text: "Data & AI : ", bold: true }}),
+                        new TextRun(resumeData.skills.dataAI.join(', '))
+                    ],
+                    spacing: {{ after: 60 }}
+                }})
             ] : []),
             
             // Analytics & Engineering Skills
             ...(resumeData.skills.analytics.length > 0 ? [
                 new Paragraph({{
-                    style: "SubHeading",
-                    children: [new TextRun("Analytics & Engineering")]
-                }}),
-                ...resumeData.skills.analytics.map(skill =>
-                    new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(skill)]
-                    }})
-                )
+                    children: [
+                        new TextRun({{ text: "Analytics & Engineering : ", bold: true }}),
+                        new TextRun(resumeData.skills.analytics.join(', '))
+                    ],
+                    spacing: {{ after: 60 }}
+                }})
             ] : []),
             
             // Business Intelligence Skills
             ...(resumeData.skills.bi.length > 0 ? [
                 new Paragraph({{
-                    style: "SubHeading",
-                    children: [new TextRun("Business Intelligence")]
-                }}),
-                ...resumeData.skills.bi.map(skill =>
-                    new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(skill)]
-                    }})
-                )
+                    children: [
+                        new TextRun({{ text: "Business Intelligence : ", bold: true }}),
+                        new TextRun(resumeData.skills.bi.join(', '))
+                    ],
+                    spacing: {{ after: 60 }}
+                }})
             ] : []),
             
             // Technical Stack
             ...(resumeData.skills.techStack.length > 0 ? [
                 new Paragraph({{
-                    style: "SubHeading",
-                    children: [new TextRun("Technical Stack")]
-                }}),
-                ...resumeData.skills.techStack.map(tech =>
-                    new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(tech)]
-                    }})
-                )
+                    children: [
+                        new TextRun({{ text: "Technical Stack : ", bold: true }}),
+                        new TextRun(resumeData.skills.techStack.join(', '))
+                    ],
+                    spacing: {{ after: 60 }}
+                }})
             ] : []),
             
             // Languages
             ...(resumeData.languages.length > 0 ? [
                 new Paragraph({{
-                    style: "SubHeading",
-                    children: [new TextRun("Languages")]
-                }}),
-                ...resumeData.languages.map(lang =>
-                    new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(lang)]
-                    }})
-                ),
-                new Paragraph({{ text: "", spacing: {{ after: 200 }} }})
+                    children: [
+                        new TextRun({{ text: "Languages : ", bold: true }}),
+                        new TextRun(resumeData.languages.join(' | '))
+                    ],
+                    spacing: {{ after: section_space }}
+                }})
             ] : []),
             
             // PROFESSIONAL EXPERIENCE
@@ -624,9 +634,9 @@ const doc = new Document({{
                             children: [new TextRun(detail)]
                         }})
                     ),
-                    new Paragraph({{ text: "", spacing: {{ after: 120 }} }})
+                    new Paragraph({{ text: "", spacing: {{ after: item_space }} }})
                 ]),
-                new Paragraph({{ text: "", spacing: {{ after: 200 }} }})
+                new Paragraph({{ text: "", spacing: {{ after: section_space - item_space }} }})
             ] : []),
             
             // EDUCATION
@@ -637,11 +647,10 @@ const doc = new Document({{
                 }}),
                 ...resumeData.education.map(edu =>
                     new Paragraph({{
-                        numbering: {{ reference: "bullets", level: 0 }},
-                        children: [new TextRun(edu)]
+                        children: [new TextRun({{ text: "• ", bold: true }}), new TextRun(edu)]
                     }})
                 ),
-                new Paragraph({{ text: "", spacing: {{ after: 200 }} }})
+                new Paragraph({{ text: "", spacing: {{ after: section_space }} }})
             ] : []),
             
             // CERTIFICATIONS
@@ -775,6 +784,11 @@ Score (0-100): overall, content, ats, tailoring. Return JSON only.""",
             
             skills_instruction = f"\nEmphasize: {custom_skills}" if custom_skills else ""
             
+            # Template specific prompt constraints
+            is_compact = template_style == 'compact_custom'
+            summary_instructions = "[MAXIMUM 3 short impactful sentences summarizing expertise and value proposition]" if is_compact else "[2-3 impactful sentences summarizing expertise and value proposition]"
+            exp_instructions = "Limit to MAXIMUM 2-3 most critical achievements. KEEP THEM SHORT AND PUNCHY." if is_compact else "Include key achievements."
+            
             task_tailor = Task(
                 description=f"""Create tailored resume using this EXACT structure:
 
@@ -791,14 +805,13 @@ CRITICAL STRUCTURE - Follow this template EXACTLY:
 [JOB TITLE]
 
 ## Professional Summary
-[2-3 impactful sentences summarizing expertise and value proposition]
+{summary_instructions}
 
 ## Core Skills
 
 ### Data & AI
-- [Skill related to Data Science, Machine Learning, AI]
-- [Skill related to Data Science, Machine Learning, AI]
-- [Skill related to Data Science, Machine Learning, AI]
+- [Skill 1]
+- [Skill 2]
 
 ### Analytics & Engineering
 - [Skill related to Analytics, Data Engineering]
@@ -824,7 +837,7 @@ CRITICAL STRUCTURE - Follow this template EXACTLY:
 [Job Title] | [Start Date] - [End Date]
 - [Achievement with quantifiable metric showing impact]
 - [Achievement with quantifiable metric showing impact]
-- [Achievement with quantifiable metric showing impact]
+({exp_instructions})
 
 ### [Company Name] — [Location]
 [Job Title] | [Start Date] - [End Date]
