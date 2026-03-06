@@ -561,7 +561,7 @@ const doc = new Document({{
             }}),
             new Paragraph({{
                 children: [new TextRun(resumeData.summary)],
-                spacing: {{ after: section_space }}
+                spacing: {{ after: {section_space} }}
             }}),
             
             // CORE SKILLS SECTION
@@ -621,7 +621,7 @@ const doc = new Document({{
                         new TextRun({{ text: "Languages : ", bold: true }}),
                         new TextRun(resumeData.languages.join(' | '))
                     ],
-                    spacing: {{ after: section_space }}
+                    spacing: {{ after: {section_space} }}
                 }})
             ] : []),
             
@@ -642,9 +642,9 @@ const doc = new Document({{
                             children: [new TextRun(detail)]
                         }})
                     ),
-                    new Paragraph({{ text: "", spacing: {{ after: item_space }} }})
+                    new Paragraph({{ text: "", spacing: {{ after: {item_space} }} }})
                 ]),
-                new Paragraph({{ text: "", spacing: {{ after: section_space - item_space }} }})
+                new Paragraph({{ text: "", spacing: {{ after: {section_space} - {item_space} }} }})
             ] : []),
             
             // EDUCATION
@@ -658,7 +658,7 @@ const doc = new Document({{
                         children: [new TextRun({{ text: "• ", bold: true }}), new TextRun(edu)]
                     }})
                 ),
-                new Paragraph({{ text: "", spacing: {{ after: section_space }} }})
+                new Paragraph({{ text: "", spacing: {{ after: {section_space} }} }})
             ] : []),
             
             // CERTIFICATIONS
