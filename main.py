@@ -174,11 +174,16 @@ class TemplateGenerator:
                 with open(js_path, 'w', encoding='utf-8') as f:
                     f.write(js_code)
                 
+                env = os.environ.copy()
+                env['NODE_PATH'] = os.path.join(os.getcwd(), 'node_modules')
+                
                 result = subprocess.run(
                     ['node', js_path],
                     capture_output=True,
                     text=True,
-                    timeout=30
+                    timeout=30,
+                    env=env,
+                    cwd=os.getcwd()
                 )
                 
                 if result.returncode != 0:
