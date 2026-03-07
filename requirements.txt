@@ -2,8 +2,7 @@
 streamlit>=1.28.0
 
 # CrewAI and LLM
-crewai>=0.11.0
-crewai-tools>=0.2.0
+# (Removed crewai as we now use direct native gemini calls)
 
 # PDF Processing
 PyPDF2>=3.0.0
@@ -16,7 +15,6 @@ beautifulsoup4>=4.12.0
 
 # Google/Gemini API Support
 google-generativeai>=0.3.0
-litellm>=1.0.0
 
 # Utilities
 python-dotenv>=1.0.0

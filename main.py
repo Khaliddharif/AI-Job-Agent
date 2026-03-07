@@ -876,7 +876,7 @@ def main():
             st.rerun()
 
     st.markdown("---")
-    st.caption("🤖 AI-Powered Resume Intelligence")
+    st.caption("🤖 AI-Powered Resume Intelligence. By Khalid Dharif")
 
 if __name__ == "__main__":
     main()
