@@ -9,8 +9,8 @@ os.environ["OTEL_SDK_DISABLED"] = "true"
 os.environ["PYDANTIC_SKIP_VALIDATING_CORE_SCHEMAS"] = "true"
 os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"
 
-import tempfile
 import json
+import base64
 import re
 import streamlit as st
 import google.generativeai as genai
@@ -35,7 +35,7 @@ MAX_PDF_SIZE_BYTES = MAX_PDF_SIZE_MB * 1024 * 1024
 
 SUPPORTED_LANGUAGES = {
     "English": "en",
-    "French": "fr", 
+    "French": "fr",
     "Spanish": "es",
     "German": "de",
     "Arabic": "ar",
@@ -185,12 +185,10 @@ class FpdfGenerator:
             
         linkedin_url = json_data.get("contact", {}).get("linkedin", "")
         github_url = json_data.get("contact", {}).get("github", "")
-        portfolio_url = json_data.get("contact", {}).get("portfolio", "")
         
         socials = []
         if linkedin_url: socials.append(("LinkedIn", linkedin_url))
         if github_url: socials.append(("GitHub", github_url))
-        if portfolio_url: socials.append(("Portfolio", portfolio_url))
         
         if socials:
             pdf.set_font("helvetica", '', 9)
@@ -411,9 +409,8 @@ class ResumeIntelligence:
             
             if progress_callback:
                 progress_callback("Analyzing resume match...")
-            
             try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
                 
                 kpi_prompt = f"""Analyze resume vs job:
 
@@ -460,8 +457,7 @@ CRITICAL STRUCTURE - Follow this JSON schema exactly for the final output:
     "phone": "+1 234 567 8900",
     "address": "City, Country",
     "linkedin": "linkedin.com/in/...",
-    "github": "github.com/...",
-    "portfolio": "portfolio.com"
+    "github": "github.com/..."
   }},
   "personal": {{
     "citizenship": "Citizenship",
@@ -508,6 +504,7 @@ Return valid JSON ONLY."""
             if progress_callback:
                 progress_callback("Processing with AI...")
             
+            model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
             tailor_res = model.generate_content(tailor_prompt)
             raw_output = str(tailor_res.text)
             
@@ -560,6 +557,8 @@ def init_session_state():
         st.session_state.selected_template = "ATS Native (FPDF)"
     if 'pdf_bytes' not in st.session_state:
         st.session_state.pdf_bytes = None
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
 
 def main():
     st.set_page_config(
@@ -800,12 +799,20 @@ def main():
         
         st.subheader(f"📄 Your Resume ({out_lang})")
         
-        tab1, tab2 = st.tabs(["📝 Content Preview", "📥 Download"])
+        tab1, tab2, tab3 = st.tabs(["� PDF Preview", "📝 Data Structure", "📥 Downloads"])
         
         with tab1:
+            if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
+                base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
+                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+            else:
+                st.info("PDF preview not available. Please wait or try re-generating.")
+                
+        with tab2:
             st.json(result['tailored_resume'])
         
-        with tab2:
+        with tab3:
             st.markdown("### Download Options")
             
             col1, col2 = st.columns(2)
@@ -836,6 +843,46 @@ def main():
             
             st.success("✅ Resume generation complete!")
             st.info(f"💡 Language: {out_lang}")
+            
+        st.markdown("---")
+        st.subheader("💬 Refine Your Resume")
+        st.info("Ask the AI to refine your resume! (e.g., 'Make the summary more aggressive', 'Add Excel to my skills')")
+        
+        for msg in st.session_state.messages:
+            st.chat_message(msg["role"]).write(msg["content"])
+            
+        if prompt := st.chat_input("Ask for a refinement..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+            
+            with st.spinner("Refining resume..."):
+                try:
+                    model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+                    refine_prompt = f"""Update the following JSON resume based on the user request.
+USER REQUEST: {prompt}
+
+CURRENT RESUME JSON:
+{json.dumps(result['tailored_resume'], indent=2)}
+
+Return ONLY the updated valid JSON matching the exact same schema. Do not add markdown blocks or explanations."""
+
+                    res = model.generate_content(refine_prompt)
+                    raw_out = res.text
+                    
+                    if "```json" in raw_out:
+                        import re
+                        m = re.search(r'```json\s*(\{.*?\})\s*```', raw_out, re.DOTALL)
+                        if m: raw_out = m.group(1)
+                        
+                    updated_json = json.loads(raw_out)
+                    
+                    st.session_state.result['tailored_resume'] = updated_json
+                    st.session_state.pdf_bytes = FpdfGenerator.generate_pdf(updated_json, theme_color_hex=theme_color)
+                    
+                    st.session_state.messages.append({"role": "assistant", "content": "I've updated your resume! Check the preview and download above."})
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to refine: {str(e)}")
         
         if st.button("🔄 New Resume", use_container_width=True):
             st.session_state.analysis_complete = False
@@ -843,6 +890,7 @@ def main():
             st.session_state.job_description = ""
             st.session_state.pdf_bytes = None
             st.session_state.latex_bytes = None
+            st.session_state.messages = []
             st.rerun()
 
     st.markdown("---")
