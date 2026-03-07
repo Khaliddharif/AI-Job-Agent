@@ -13,7 +13,7 @@ import tempfile
 import json
 import re
 import streamlit as st
-from crewai import Agent, Task, Crew, LLM
+import google.generativeai as genai
 from PyPDF2 import PdfReader
 import requests
 from bs4 import BeautifulSoup
@@ -57,13 +57,12 @@ CV_TEMPLATES = {
 }
 
 @st.cache_resource
-def get_llm():
-    """Cached LLM instance to avoid recreation"""
-    return LLM(
-        model="gemini/gemini-flash-latest",
-        api_key=os.environ.get("GEMINI_API_KEY"),
-        temperature=0.1
-    )
+def init_gemini():
+    """Configure Gemini API"""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        genai.configure(api_key=api_key)
+    return True
 
 # --- SECTION 2: UTILITY FUNCTIONS ---
 class JobScraper:
@@ -352,7 +351,7 @@ class ResumeIntelligence:
     
     def __init__(self, pdf_file):
         self.resume_text = self._read_pdf(pdf_file)
-        self.llm = get_llm()
+        init_gemini()
     
     def _read_pdf(self, file) -> str:
         try:
@@ -411,41 +410,27 @@ class ResumeIntelligence:
             custom_skills = InputValidator.sanitize_text(custom_skills, 500)
             
             if progress_callback:
-                progress_callback("Creating AI agents...")
+                progress_callback("Analyzing resume match...")
             
-            analyzer = Agent(
-                role='ATS Resume Scorer',
-                goal=f'Evaluate resume for {target_role}.',
-                backstory='Expert in ATS systems and recruitment.',
-                llm=self.llm,
-                verbose=False
-            )
-            
-            writer = Agent(
-                role=f'Resume Writer - Data/AI Professional',
-                goal=f'Create ATS-optimized resume in {language} for {target_role} with categorized skills.',
-                backstory=f'Expert resume writer specializing in {language} and technical roles with Data & AI, Analytics, and BI skills categorization.',
-                llm=self.llm,
-                verbose=False
-            )
-            
-            if progress_callback:
-                progress_callback("Analyzing resume...")
-            
-            task_kpi = Task(
-                description=f"""Analyze resume vs job:
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                kpi_prompt = f"""Analyze resume vs job:
 
 RESUME: {self.resume_text[:3000]}
 JOB: {job_description[:2000]}
 ROLE: {target_role}
 
-Score (0-100): overall, content, ats, tailoring. Return JSON only.""",
-                expected_output='JSON: overall, content, ats, tailoring (0-100)',
-                agent=analyzer
-            )
+Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"overall": 80, "content": 70, "ats": 60, "tailoring": 80}}"""
+                
+                kpi_res = model.generate_content(kpi_prompt)
+                scores = self._parse_scores(kpi_res.text)
+            except Exception as e:
+                logger.error(f"Failed to generate scores: {str(e)}")
+                scores = {"overall": 0, "content": 0, "ats": 0, "tailoring": 0}
             
             if progress_callback:
-                progress_callback(f"Tailoring resume with custom template...")
+                progress_callback(f"Tailoring resume with native template constraints...")
             
             skills_instruction = f"\nEmphasize: {custom_skills}" if custom_skills else ""
             
@@ -457,10 +442,9 @@ Score (0-100): overall, content, ats, tailoring. Return JSON only.""",
                 bullet_instruction = "Highly detailed bullet points exploring context, actions, and results (multiple sentences ok)."
             
             if progress_callback:
-                progress_callback(f"Tailoring resume with LaTeX template constraints...")
+                progress_callback(f"Writing ATS-friendly JSON output...")
             
-            task_tailor = Task(
-                description=f"""Create tailored resume using this EXACT JSON structure:
+            tailor_prompt = f"""Create tailored resume using this EXACT JSON structure:
 
 ORIGINAL: {self.resume_text}
 JOB: {job_description}
@@ -477,6 +461,7 @@ CRITICAL STRUCTURE - Follow this JSON schema exactly for the final output:
     "address": "City, Country",
     "linkedin": "linkedin.com/in/...",
     "github": "github.com/...",
+    "portfolio": "portfolio.com"
   }},
   "personal": {{
     "citizenship": "Citizenship",
@@ -518,29 +503,14 @@ Write ENTIRELY in {language}. Use professional {language} terminology.
 - CRITICAL: Count the exact number of bullets for each experience block in the original resume. You MUST output the EXACT SAME NUMBER of bullets for that block in the generated JSON. Do NOT summarize 4 bullets into 2. Output 4 bullets.
 - Group skills logically into categories, ONE string per category formatting explicitly like "Category Name: Skill 1, Skill 2".
 - Do NOT include dates in certifications, just return a simple list of names and organizations.
-Return valid JSON ONLY.""",
-                expected_output=f"Output only valid JSON following the schema, written in {language}.",
-                agent=writer,
-                context=[task_kpi]
-            )
-            
-            crew = Crew(
-                agents=[analyzer, writer], 
-                tasks=[task_kpi, task_tailor], 
-                verbose=False, 
-                memory=False
-            )
-            
+Return valid JSON ONLY."""
+
             if progress_callback:
-                progress_callback("Processing...")
+                progress_callback("Processing with AI...")
             
-            result = crew.kickoff()
+            tailor_res = model.generate_content(tailor_prompt)
+            raw_output = str(tailor_res.text)
             
-            scores = None
-            if result.tasks_output and len(result.tasks_output) > 0:
-                scores = self._parse_scores(result.tasks_output[0].raw)
-            
-            raw_output = str(result.tasks_output[1].raw)
             if "```json" in raw_output:
                 json_match = re.search(r'```json\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
                 if json_match:
