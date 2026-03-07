@@ -804,7 +804,7 @@ def main():
         with tab1:
             if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
                 base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
-                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></iframe>'
+                pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></embed>'
                 st.markdown(pdf_display, unsafe_allow_html=True)
             else:
                 st.info("PDF preview not available. Please wait or try re-generating.")
