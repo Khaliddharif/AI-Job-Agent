@@ -10,7 +10,6 @@ os.environ["PYDANTIC_SKIP_VALIDATING_CORE_SCHEMAS"] = "true"
 os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"
 
 import json
-import base64
 import re
 import streamlit as st
 import google.generativeai as genai
@@ -803,9 +802,8 @@ def main():
         
         with tab1:
             if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
-                base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
-                pdf_display = f'<embed src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" type="application/pdf"></embed>'
-                st.markdown(pdf_display, unsafe_allow_html=True)
+                from streamlit_pdf_viewer import pdf_viewer
+                pdf_viewer(st.session_state.pdf_bytes, width=800, height=800)
             else:
                 st.info("PDF preview not available. Please wait or try re-generating.")
                 
