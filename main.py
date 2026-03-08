@@ -497,6 +497,7 @@ Write ENTIRELY in {language}. Use professional {language} terminology.
 - {bullet_instruction}
 - CRITICAL: Count the exact number of bullets for each experience block in the original resume. You MUST output the EXACT SAME NUMBER of bullets for that block in the generated JSON. Do NOT summarize 4 bullets into 2. Output 4 bullets.
 - Group skills logically into categories, ONE string per category formatting explicitly like "Category Name: Skill 1, Skill 2".
+- CRITICAL KEYWORD INJECTION: Identify ALL relevant skills, tools, and keywords from the JOB description and add them into the skills section, as well as weaving them naturally into the experience bullet points.
 - Do NOT include dates in certifications, just return a simple list of names and organizations.
 Return valid JSON ONLY."""
 
