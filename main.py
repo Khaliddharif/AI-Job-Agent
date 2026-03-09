@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple
 import logging
 import subprocess
+from translations import UI_TEXT
 
 # --- SECTION 1: SYSTEM INITIALIZATION ---
 logging.basicConfig(level=logging.INFO)
@@ -161,14 +162,14 @@ class FpdfGenerator:
         name = safe_text(json_data.get("name", "Name"))
         title = safe_text(json_data.get("title", ""))
         
-        pdf.set_font("helvetica", 'B', 22)
-        pdf.set_text_color(*theme_rgb)
-        pdf.cell(0, 10, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        pdf.set_font("helvetica", '', 14)
+        pdf.set_text_color(127, 140, 141)
+        pdf.cell(0, 8, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
         
         if title:
-            pdf.set_font("helvetica", '', 14)
-            pdf.set_text_color(127, 140, 141)
-            pdf.cell(0, 8, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            pdf.set_font("helvetica", 'B', 22)
+            pdf.set_text_color(*theme_rgb)
+            pdf.cell(0, 10, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             
         pdf.set_text_color(0, 0, 0)
         
@@ -292,22 +293,30 @@ class FpdfGenerator:
             pdf.set_text_color(0, 0, 0)
             pdf.ln(1)
             
+            edu_grouped = {}
             for edu in education:
-                degree = safe_text(edu.get("degree", ""))
                 inst = safe_text(edu.get("institution", ""))
-                dates = safe_text(edu.get("dates", ""))
+                if inst not in edu_grouped:
+                    edu_grouped[inst] = []
+                edu_grouped[inst].append(edu)
                 
-                current_y = pdf.get_y()
-                pdf.set_font("helvetica", '', 9)
-                pdf.set_xy(pdf.w - pdf.r_margin - 60, current_y)
-                pdf.cell(60, 5, dates, align='R', new_x=XPos.LMARGIN, new_y=YPos.TOP)
-                
-                pdf.set_xy(pdf.l_margin, current_y)
-                pdf.set_font("helvetica", 'B', 9.5)
-                pdf.multi_cell(pdf.epw - 65, 5, degree, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                
-                pdf.set_font("helvetica", 'I', 9)
-                pdf.multi_cell(0, 5, inst, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            for inst, degrees in edu_grouped.items():
+                for edu in degrees:
+                    degree = safe_text(edu.get("degree", ""))
+                    dates = safe_text(edu.get("dates", ""))
+                    
+                    current_y = pdf.get_y()
+                    pdf.set_font("helvetica", '', 9)
+                    pdf.set_xy(pdf.w - pdf.r_margin - 60, current_y)
+                    pdf.cell(60, 5, dates, align='R', new_x=XPos.LMARGIN, new_y=YPos.TOP)
+                    
+                    pdf.set_xy(pdf.l_margin, current_y)
+                    pdf.set_font("helvetica", 'B', 9.5)
+                    pdf.multi_cell(pdf.epw - 65, 5, degree, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                    
+                if inst:
+                    pdf.set_font("helvetica", 'I', 9)
+                    pdf.multi_cell(0, 5, inst, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(1.5)
                 
         # --- Certifications ---
@@ -440,38 +449,48 @@ Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"ov
             if progress_callback:
                 progress_callback(f"Writing ATS-friendly JSON output...")
             
-            tailor_prompt = f"""Create tailored resume using this EXACT JSON structure:
+            tailor_prompt = f"""You are an expert ATS resume optimizer and professional career writer.
 
-ORIGINAL: {self.resume_text}
-JOB: {job_description}
-ROLE: {target_role}
+Your task is to rewrite and optimize the candidate's resume so it aligns strongly with the provided Job Description and maximizes ATS keyword matching while keeping the resume truthful and professional.
+
+INPUTS:
+1. Job Description:
+{job_description}
+
+2. Candidate Resume:
+{self.resume_text}
+
+TARGET ROLE: {target_role}
 {skills_instruction}
 
-CRITICAL STRUCTURE - Follow this JSON schema exactly for the final output:
+INSTRUCTIONS:
+
+1. Analyze the Job Description carefully and extract all relevant keywords, including:
+   - Technical skills, Tools, Programming languages, Methodologies, Soft skills, Industry terminology, and Role-specific responsibilities
+
+2. Categorize the keywords into: Technical Keywords, Domain/Industry Keywords, Soft Skills / Business Skills, Tools / Technologies, and Languages.
+
+3. Resume Optimization Rules:
+TECHNICAL KEYWORDS & LANGUAGES: Add missing technical keywords and explicitly ensure spoken languages are separated into a "Languages" category within the SKILLS section. Group skills logically. You MUST ensure that "Soft Skills" is always the final category in the SKILLS section. Do not invent skills the candidate clearly does not possess.
+NON-TECHNICAL / DOMAIN: Integrate them naturally into the EXPERIENCE bullet points. Rewrite bullet points to match the responsibilities and language used in the Job Description.
+EXPERIENCE SECTION: Refine bullet points to reflect achievements aligned with the Job Description. Use action verbs and measurable impact. Ensure each bullet includes relevant keywords from the JD.
+ATS OPTIMIZATION: Maintain a clean ATS-friendly structure. Ensure keyword density without keyword stuffing.
+CONSISTENCY: Preserve truthful experience and do not fabricate roles or companies. Improve clarity, grammar, and professional tone.
+FORMATTING: {bullet_instruction} Use exactly MM/YYYY - MM/YYYY format for all dates. Write ENTIRELY in {language}. 
+CRITICAL: Count the exact number of bullets for each experience block in the original resume. You MUST output the EXACT SAME NUMBER of bullets for that block in the generated JSON. Do NOT summarize 4 bullets into 2. Output 4 bullets.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON. Your response must match this schema exactly:
+
 {{
   "name": "First Last",
   "title": "{target_role}",
-  "contact": {{
-    "email": "user@example.com",
-    "phone": "+1 234 567 8900",
-    "address": "City, Country",
-    "linkedin": "linkedin.com/in/...",
-    "github": "github.com/..."
-  }},
-  "personal": {{
-    "citizenship": "Citizenship",
-    "family": "Status"
-  }},
-  "section_headers": {{
-    "summary": "Translate 'Professional Summary' to {language}",
-    "experience": "Translate 'Professional Experience' to {language}",
-    "education": "Translate 'Education' to {language}",
-    "skills": "Translate 'Technical Skills' to {language}",
-    "certifications": "Translate 'Certifications' to {language}"
-  }},
+  "contact": {{ "email": "user@example.com", "phone": "+1 234 567 8900", "address": "City, Country", "linkedin": "linkedin.com/in/...", "github": "github.com/..." }},
+  "personal": {{ "citizenship": "Citizenship", "family": "Status" }},
+  "section_headers": {{ "summary": "Translate 'Professional Summary' to {language}", "experience": "Translate 'Professional Experience' to {language}", "education": "Translate 'Education' to {language}", "skills": "Translate 'Skills' to {language}", "certifications": "Translate 'Certifications' to {language}" }},
   "languages": ["English", "French"],
   "summary": "3 impactful sentences summarizing expertise and value proposition",
-  "skills": ["Category 1: Skill A, Skill B", "Category 2: Skill C, Skill D"],
+  "skills": ["Languages: Lang A, Lang B", "Technical: Skill C, Skill D", "Soft Skills: Skill A, Skill B"],
   "experience": [
     {{
       "company": "Company Name",
@@ -482,24 +501,21 @@ CRITICAL STRUCTURE - Follow this JSON schema exactly for the final output:
     }}
   ],
   "education": [
-    {{
-      "degree": "Degree",
-      "institution": "University",
-      "dates": "MM/YYYY - MM/YYYY"
-    }}
+    {{ "degree": "Degree", "institution": "University", "dates": "MM/YYYY - MM/YYYY" }}
   ],
-  "certifications": ["Cert 1 - Org 1", "Cert 2 - Org 2", "Cert 3 - Org 3"],
-  "hobbies": ["Hobby 1", "Hobby 2"]
+  "certifications": ["Cert 1 - Org 1", "Cert 2 - Org 2"],
+  "hobbies": ["Hobby 1", "Hobby 2"],
+  "extracted_keywords": {{
+      "Technical Skills": ["..."],
+      "Tools & Technologies": ["..."],
+      "Domain Keywords": ["..."],
+      "Soft Skills": ["..."]
+  }},
+  "projected_scores": {{ "overall": 95, "content": 90, "ats": 95, "tailoring": 98 }},
+  "ats_summary": "Brief explanation of how the resume was optimized to match the Job Description."
 }}
 
-Write ENTIRELY in {language}. Use professional {language} terminology. 
-- Use EXACTLY MM/YYYY - MM/YYYY format for all dates.
-- {bullet_instruction}
-- CRITICAL: Count the exact number of bullets for each experience block in the original resume. You MUST output the EXACT SAME NUMBER of bullets for that block in the generated JSON. Do NOT summarize 4 bullets into 2. Output 4 bullets.
-- Group skills logically into categories, ONE string per category formatting explicitly like "Category Name: Skill 1, Skill 2".
-- CRITICAL KEYWORD INJECTION: Identify ALL relevant skills, tools, and keywords from the JOB description and add them into the skills section, as well as weaving them naturally into the experience bullet points.
-- Do NOT include dates in certifications, just return a simple list of names and organizations.
-Return valid JSON ONLY."""
+Return valid JSON ONLY. Do not include markdown formatting or explanations outside the JSON."""
 
             if progress_callback:
                 progress_callback("Processing with AI...")
@@ -559,95 +575,164 @@ def init_session_state():
         st.session_state.pdf_bytes = None
     if 'messages' not in st.session_state:
         st.session_state.messages = []
+    if 'current_step' not in st.session_state:
+        st.session_state.current_step = 1
+    
+    # Store persistent inputs
+    if 'uploaded_file' not in st.session_state:
+        st.session_state.uploaded_file = None
+    if 'theme_color' not in st.session_state:
+        st.session_state.theme_color = "#2C3E50"
+    if 'out_lang' not in st.session_state:
+        st.session_state.out_lang = "English"
+    if 'target_role' not in st.session_state:
+        st.session_state.target_role = "Data Scientist"
+    if 'custom_skills' not in st.session_state:
+        st.session_state.custom_skills = ""
+    if 'verbosity_level' not in st.session_state:
+        st.session_state.verbosity_level = "Compact"
+    if 'app_lang' not in st.session_state:
+        st.session_state.app_lang = "English"
+
+def next_step():
+    st.session_state.current_step += 1
+
+def prev_step():
+    st.session_state.current_step -= 1
 
 def main():
     st.set_page_config(
-        page_title="AI Resume Intelligence", 
+        page_title="Intelligence CV Rewriter", 
         layout="wide",
         page_icon="🎯"
     )
     
     init_session_state()
     
-    st.title("🎯 AI Resume Intelligence Platform")
-    st.markdown("*Professional resume with categorized skills structure*")
+    top_col1, top_col2, top_col3 = st.columns([6, 2, 2])
+    with top_col2:
+        st.session_state.app_lang = st.selectbox(
+            "Language", 
+            list(SUPPORTED_LANGUAGES.keys()), 
+            index=list(SUPPORTED_LANGUAGES.keys()).index(st.session_state.app_lang),
+            label_visibility="collapsed"
+        )
     
-    # Sidebar
-    with st.sidebar:
-        st.header("⚙️ Configuration")
-        
-        if st.button("🔄 Reset Application", use_container_width=True):
+    # Fallback to English if translation is missing
+    t = UI_TEXT.get(st.session_state.app_lang, UI_TEXT["English"])
+    
+    with top_col3:
+        if st.button(t["reset_app"], use_container_width=True):
             st.session_state.clear()
             st.rerun()
             
-        st.markdown("---")
-        st.subheader("📄 Upload Resume")
-        uploaded_file = st.file_uploader(
-            "Upload your current resume (PDF)", 
-            type="pdf",
-            help=f"Maximum file size: {MAX_PDF_SIZE_MB}MB"
-        )
+    st.title(t["title"])
+    st.markdown(t["subtitle"])
+    st.markdown(t["description"])
+    st.markdown("---")
+    
+    # Progress Bar
+    progress_cols = st.columns(4)
+    steps = [t["step_profile"], t["step_job"], t["step_gen"], t["step_res"]]
+    for i, col in enumerate(progress_cols):
+        with col:
+            if st.session_state.current_step > i + 1:
+                st.markdown(f"**✅ {steps[i]}**")
+            elif st.session_state.current_step == i + 1:
+                st.markdown(f"**🔵 {steps[i]}**")
+            else:
+                st.markdown(f"<span style='color:gray'>⚪ {steps[i]}</span>", unsafe_allow_html=True)
+                
+    st.markdown("---")
+
+    # ==========================================
+    # STEP 1: Profile & Preferences
+    # ==========================================
+    if st.session_state.current_step == 1:
+        st.header(t["step1_header"])
         
-        if uploaded_file:
-            st.success(f"✓ {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
-        
-        st.markdown("---")
-        st.subheader("🎨 Template & Styling")
-        st.info("✓ Using ATS Native (FPDF) Template")
-        
-        theme_color = st.color_picker("Section Header Color", value="#2C3E50", help="Choose a custom color for section titles and your name.")
-        
-        st.markdown("---")
-        st.subheader("🌍 Language & Role")
-        
-        out_lang = st.selectbox(
-            "Output Language",
-            options=list(SUPPORTED_LANGUAGES.keys()),
-            index=1
-        )
-        
-        role_options = [
-            "Data Scientist",
-            "Data Analyst",
-            "Machine Learning Engineer",
-            "Data Engineer",
-            "AI Engineer",
-            "Business Intelligence Analyst",
-            "Software Engineer",
-            "Other (Specify below)"
-        ]
-        
-        selected_role = st.selectbox(
-            "Target Role",
-            options=role_options,
-            index=0
-        )
-        
-        target_role = selected_role
-        if selected_role == "Other (Specify below)":
-            target_role = st.text_input(
-                "Specify Target Role",
-                placeholder="e.g., Cloud Architect"
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader(t["upload_resume"])
+            uploaded_file = st.file_uploader(
+                t["upload_label"], 
+                type="pdf",
+                help=t["upload_help"].format(size=MAX_PDF_SIZE_MB)
             )
-        
-        custom_skills = st.text_area(
-            "Priority Keywords",
-            placeholder="e.g., Machine Learning, Python, TensorFlow",
-            height=100
-        )
-        
-        verbosity_level = st.selectbox(
-            "Bullet Detail Level",
-            options=["Compact", "Medium", "Detailed"],
-            index=0,
-            help="Determine how verbose the AI should make your experience bullet points."
-        )
-    
-    # Main Area
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.subheader("🔗 Job Information")
+            if uploaded_file:
+                st.session_state.uploaded_file = uploaded_file
+                st.success(f"✓ {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
+            elif st.session_state.uploaded_file is not None:
+                st.success(f"✓ {st.session_state.uploaded_file.name} previously uploaded")
+                uploaded_file = st.session_state.uploaded_file
+                
+            st.markdown("---")
+            st.subheader(t["styling"])
+            st.session_state.theme_color = st.color_picker(
+                t["color_picker"], 
+                value=st.session_state.theme_color, 
+                help=t["color_help"]
+            )
+            
+        with col2:
+            st.subheader(t["role_details"])
+            
+            st.session_state.out_lang = st.selectbox(
+                t["out_lang"],
+                options=list(SUPPORTED_LANGUAGES.keys()),
+                index=list(SUPPORTED_LANGUAGES.keys()).index(st.session_state.out_lang) if st.session_state.out_lang in SUPPORTED_LANGUAGES else 1
+            )
+            
+            role_options = [
+                "Data Scientist", "Data Analyst", "Machine Learning Engineer",
+                "Data Engineer", "AI Engineer", "Business Intelligence Analyst",
+                "Software Engineer", t["other_role"]
+            ]
+            
+            current_role_index = 0
+            if st.session_state.target_role in role_options:
+                current_role_index = role_options.index(st.session_state.target_role)
+            elif st.session_state.target_role != "Data Scientist":
+                current_role_index = len(role_options) - 1 # Other
+                
+            selected_role = st.selectbox(t["target_role"], options=role_options, index=current_role_index)
+            
+            if selected_role == t["other_role"]:
+                st.session_state.target_role = st.text_input(t["specify_role"], value=st.session_state.target_role if current_role_index == len(role_options) - 1 else "")
+            else:
+                st.session_state.target_role = selected_role
+                
+            st.session_state.custom_skills = st.text_area(
+                t["priority_kw"],
+                value=st.session_state.custom_skills,
+                placeholder=t["priority_ph"],
+                height=100
+            )
+            
+            st.session_state.verbosity_level = st.selectbox(
+                t["verbosity"],
+                options=["Compact", "Medium", "Detailed"],
+                index=["Compact", "Medium", "Detailed"].index(st.session_state.verbosity_level)
+            )
+            
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col3:
+            if st.button(t["next_step"], use_container_width=True, type="primary"):
+                if not st.session_state.uploaded_file:
+                    st.error(t["err_no_resume"])
+                elif not st.session_state.target_role:
+                    st.error(t["err_no_role"])
+                else:
+                    next_step()
+                    st.rerun()
+
+    # ==========================================
+    # STEP 2: Job Description
+    # ==========================================
+    elif st.session_state.current_step == 2:
+        st.header(t["step2_header"])
+        st.write(t["jd_info"])
         
         input_method = st.radio(
             "Job description source:",
@@ -658,206 +743,258 @@ def main():
         if input_method == "Paste Job URL":
             job_url = st.text_input("Job Posting URL", placeholder="https://...")
             
-            if job_url and st.button("🔍 Fetch", type="secondary"):
+            if job_url and st.button("🔍 Fetch Job Description", type="secondary"):
                 with st.spinner("Fetching..."):
                     success, content = JobScraper.fetch_job_description(job_url)
                     if success:
                         st.session_state.job_description = content
-                        st.success("✓ Fetched!")
-                        st.text_area("Preview:", content[:500] + "...", height=150, disabled=True)
+                        st.success("✓ Fetched successfully!")
                     else:
                         st.error(f"❌ {content}")
         else:
             job_description_input = st.text_area(
                 "Job Description",
-                placeholder="Paste full job description...",
+                value=st.session_state.job_description,
+                placeholder="Paste full job description here... (Press Ctrl+Enter to apply)",
                 height=300
             )
             if job_description_input:
                 st.session_state.job_description = job_description_input
-    
-    with col2:
-        st.subheader("🚀 Generate")
-        
-        if uploaded_file and target_role and st.session_state.job_description:
-            st.success("✓ Ready")
-            ready_to_process = True
-        else:
-            missing = []
-            if not uploaded_file:
-                missing.append("Resume PDF")
-            if not target_role:
-                missing.append("Target Role")
-            if not st.session_state.job_description:
-                missing.append("Job Description")
-            st.warning(f"⚠️ Missing: {', '.join(missing)}")
-            ready_to_process = False
-        
+                
+        if st.session_state.job_description:
+            st.success("✓ Job description loaded.")
+            with st.expander("Preview Current Job Description"):
+                st.write(st.session_state.job_description[:500] + "...")
+                
         st.markdown("---")
-        
-        if st.button(
-            f"🎯 Generate {st.session_state.selected_template} Resume", 
-            type="primary", 
-            disabled=not ready_to_process,
-            use_container_width=True
-        ):
-            is_valid, error_msg = InputValidator.validate_pdf(uploaded_file)
-            if not is_valid:
-                st.error(f"❌ {error_msg}")
-                return
-            
-            is_valid, error_msg = InputValidator.validate_inputs(
-                target_role, 
-                st.session_state.job_description
-            )
-            if not is_valid:
-                st.error(f"❌ {error_msg}")
-                return
-            
-            status_placeholder = st.empty()
-            
-            try:
-                status_placeholder.info("🔧 Initializing...")
-                bot = ResumeIntelligence(uploaded_file)
-                
-                def update_progress(msg):
-                    status_placeholder.info(f"⚙️ {msg}")
-                
-                template_info = CV_TEMPLATES[st.session_state.selected_template]
-                
-                result = bot.run_analysis(
-                    st.session_state.job_description,
-                    target_role,
-                    custom_skills,
-                    out_lang,
-                    template_info['style'],
-                    verbosity=verbosity_level,
-                    progress_callback=update_progress
-                )
-                
-                if result['success']:
-                    st.session_state.result = result
-                    st.session_state.analysis_complete = True
-                    status_placeholder.success("✅ Complete!")
-                    
-                    with st.spinner("Generating Native ATS PDF..."):
-                        try:
-                            pdf_bytes = FpdfGenerator.generate_pdf(result['tailored_resume'], theme_color_hex=theme_color)
-                            if pdf_bytes:
-                                st.session_state.pdf_bytes = pdf_bytes
-                                st.success("✅ Professional ATS-compliant PDF generated instantly!")
-                            else:
-                                st.error("❌ Failed to generate PDF.")
-                        except Exception as e:
-                            st.error(f"❌ Generation failed. (is fpdf installed?) Error: {str(e)}")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button(t["prev_step"], use_container_width=True):
+                prev_step()
+                st.rerun()
+        with col3:
+            if st.button(t["next_step"], use_container_width=True, type="primary"):
+                if len(st.session_state.job_description.strip()) < 50:
+                    st.error(t["err_no_jd"])
                 else:
-                    st.error(f"❌ Failed: {result.get('error', 'Unknown')}")
-                    
-            except ValueError as e:
-                st.error(f"❌ {str(e)}")
-            except Exception as e:
-                logger.error(f"Error: {str(e)}")
-                st.error(f"❌ Error occurred")
-    
-    # Results
-    if st.session_state.analysis_complete and st.session_state.result:
-        st.markdown("---")
-        st.header("📊 Results")
-        
-        result = st.session_state.result
-        
-        if result['scores']:
-            st.subheader("📈 Scores")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            scores = result['scores']
-            
-            def get_score_color(score):
-                return "🟢" if score >= 80 else "🟡" if score >= 60 else "🔴"
-            
-            with col1:
-                score = scores.get('overall', 0)
-                st.metric("Overall", f"{score}%")
-                st.caption(f"{get_score_color(score)}")
-            
-            with col2:
-                score = scores.get('content', 0)
-                st.metric("Content", f"{score}%")
-                st.caption(f"{get_score_color(score)}")
-            
-            with col3:
-                score = scores.get('ats', 0)
-                st.metric("ATS", f"{score}%")
-                st.caption(f"{get_score_color(score)}")
-            
-            with col4:
-                score = scores.get('tailoring', 0)
-                st.metric("Tailoring", f"{score}%")
-                st.caption(f"{get_score_color(score)}")
-            
-            st.markdown("---")
-        
-        st.subheader(f"📄 Your Resume ({out_lang})")
-        
-        tab1, tab2, tab3 = st.tabs(["� PDF Preview", "📝 Data Structure", "📥 Downloads"])
-        
-        with tab1:
-            if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
-                from streamlit_pdf_viewer import pdf_viewer
-                pdf_viewer(st.session_state.pdf_bytes, width=800, height=800)
-            else:
-                st.info("PDF preview not available. Please wait or try re-generating.")
-                
-        with tab2:
-            st.json(result['tailored_resume'])
-        
-        with tab3:
-            st.markdown("### Download Options")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
-                    st.download_button(
-                        label="📥 Download PDF (ATS Optimized)",
-                        data=st.session_state.pdf_bytes,
-                        file_name=f"Resume_{target_role.replace(' ', '_')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        type="primary"
-                    )
-                    st.caption("✨ Native 1-Column Format")
-                else:
-                    st.warning("PDF compilation failed")
+                    next_step()
+                    st.rerun()
 
-            with col2:
-                st.download_button(
-                    label="📥 Raw JSON Data",
-                    data=result['raw_markdown'],
-                    file_name=f"Resume_{target_role.replace(' ', '_')}_raw.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-                st.caption("📝 Base AI Output structure")
-            
-            st.success("✅ Resume generation complete!")
-            st.info(f"💡 Language: {out_lang}")
+    # ==========================================
+    # STEP 3: Generation
+    # ==========================================
+    elif st.session_state.current_step == 3:
+        st.header(t["step3_header"])
+        
+        st.info(t["review_info"])
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### Profile Summary")
+            st.write(f"**Target Role:** {st.session_state.target_role}")
+            st.write(f"**Output Language:** {st.session_state.out_lang}")
+            st.write(f"**Verbosity:** {st.session_state.verbosity_level}")
+        with col2:
+            st.markdown("### Job Summary")
+            st.write(f"**Job Description Length:** {len(st.session_state.job_description)} {t['chars']}")
+            st.write(f"**Priority Keywords:** {st.session_state.custom_skills if st.session_state.custom_skills else 'None specified'}")
             
         st.markdown("---")
-        st.subheader("💬 Refine Your Resume")
-        st.info("Ask the AI to refine your resume! (e.g., 'Make the summary more aggressive', 'Add Excel to my skills')")
         
-        for msg in st.session_state.messages:
-            st.chat_message(msg["role"]).write(msg["content"])
-            
-        if prompt := st.chat_input("Ask for a refinement..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            st.chat_message("user").write(prompt)
-            
-            with st.spinner("Refining resume..."):
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button(t["prev_step"], use_container_width=True):
+                prev_step()
+                st.rerun()
+                
+        with col2:
+            if st.button(
+                t["gen_btn"],  
+                type="primary", 
+                use_container_width=True
+            ):
+                is_valid, error_msg = InputValidator.validate_pdf(st.session_state.uploaded_file)
+                if not is_valid:
+                    st.error(f"❌ {error_msg}")
+                    return
+                
+                is_valid, error_msg = InputValidator.validate_inputs(
+                    st.session_state.target_role, 
+                    st.session_state.job_description
+                )
+                if not is_valid:
+                    st.error(f"❌ {error_msg}")
+                    return
+                
+                status_placeholder = st.empty()
+                
                 try:
-                    model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-                    refine_prompt = f"""Update the following JSON resume based on the user request.
+                    status_placeholder.info("🔧 Initializing AI Engine...")
+                    bot = ResumeIntelligence(st.session_state.uploaded_file)
+                    
+                    def update_progress(msg):
+                        status_placeholder.info(f"⚙️ {msg}")
+                    
+                    template_info = CV_TEMPLATES[st.session_state.selected_template]
+                    
+                    result = bot.run_analysis(
+                        st.session_state.job_description,
+                        st.session_state.target_role,
+                        st.session_state.custom_skills,
+                        st.session_state.out_lang,
+                        template_info['style'],
+                        verbosity=st.session_state.verbosity_level,
+                        progress_callback=update_progress
+                    )
+                    
+                    if result['success']:
+                        st.session_state.result = result
+                        st.session_state.analysis_complete = True
+                        status_placeholder.success("✅ AI Analysis Complete!")
+                        
+                        with st.spinner("Compiling Professional PDF..."):
+                            try:
+                                pdf_bytes = FpdfGenerator.generate_pdf(result['tailored_resume'], theme_color_hex=st.session_state.theme_color)
+                                if pdf_bytes:
+                                    st.session_state.pdf_bytes = pdf_bytes
+                                    st.success("✅ PDF generated instantly!")
+                                    # Move to results step automatically
+                                    next_step()
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Failed to generate PDF.")
+                            except Exception as e:
+                                st.error(f"❌ Generation failed. Error: {str(e)}")
+                    else:
+                        st.error(f"❌ Failed: {result.get('error', 'Unknown')}")
+                        
+                except ValueError as e:
+                    st.error(f"❌ {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error: {str(e)}")
+                    st.error(f"❌ Error occurred")
+                    
+    # ==========================================
+    # STEP 4: Results & Refinement
+    # ==========================================
+    elif st.session_state.current_step == 4:
+        st.header(t["step4_header"])
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            if st.button(t["back_gen"], use_container_width=True):
+                prev_step()
+                st.rerun()
+        with col3:
+            if st.button(t["start_over"], use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
+                
+        if st.session_state.analysis_complete and st.session_state.result:
+            st.markdown("---")
+            
+            result = st.session_state.result
+            
+            if result['scores']:
+                st.subheader(t["kpi_header"])
+                st.info(t["kpi_info"])
+                
+                col1, col2, col3, col4 = st.columns(4)
+                old_scores = result['scores']
+                new_scores = result['tailored_resume'].get('projected_scores', {})
+                
+                def get_score_color(score):
+                    return "🟢" if int(score) >= 80 else "🟡" if int(score) >= 60 else "🔴"
+                
+                with col1:
+                    o_score = old_scores.get('overall', 0)
+                    n_score = new_scores.get('overall', o_score)
+                    st.metric(t["overall"], f"{n_score}%", f"{n_score - o_score}%")
+                    st.caption(t["orig"].format(score=o_score, color=get_score_color(o_score), n_color=get_score_color(n_score)))
+                
+                with col2:
+                    o_score = old_scores.get('content', 0)
+                    n_score = new_scores.get('content', o_score)
+                    st.metric(t["content"], f"{n_score}%", f"{n_score - o_score}%")
+                    st.caption(t["orig"].format(score=o_score, color=get_score_color(o_score), n_color=get_score_color(n_score)))
+                
+                with col3:
+                    o_score = old_scores.get('ats', 0)
+                    n_score = new_scores.get('ats', o_score)
+                    st.metric(t["ats_comp"], f"{n_score}%", f"{n_score - o_score}%")
+                    st.caption(t["orig"].format(score=o_score, color=get_score_color(o_score), n_color=get_score_color(n_score)))
+                
+                with col4:
+                    o_score = old_scores.get('tailoring', 0)
+                    n_score = new_scores.get('tailoring', o_score)
+                    st.metric(t["job_tail"], f"{n_score}%", f"{n_score - o_score}%")
+                    st.caption(t["orig"].format(score=o_score, color=get_score_color(o_score), n_color=get_score_color(n_score)))
+                
+                st.markdown("---")
+            
+            st.subheader(f"{t['gen_out']} ({st.session_state.out_lang})")
+            
+            tab1, tab2, tab3 = st.tabs([t["tab_pdf"], t["tab_data"], t["tab_dl"]])
+            
+            with tab1:
+                if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
+                    import base64
+                    base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
+                    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+                    st.markdown(pdf_display, unsafe_allow_html=True)
+                else:
+                    st.info(t["pdf_unavail"])
+                    
+            with tab2:
+                st.markdown(t["ext_kw"])
+                st.json(result['tailored_resume'].get('extracted_keywords', {}))
+                st.markdown(t["ats_sum"])
+                st.info(result['tailored_resume'].get('ats_summary', t["no_sum"]))
+                st.markdown(t["full_cv"])
+                st.json({k: v for k, v in result['tailored_resume'].items() if k not in ['extracted_keywords', 'ats_summary', 'projected_scores']})
+            
+            with tab3:
+                st.markdown(t["dl_opt"])
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
+                        st.download_button(
+                            label=t["dl_pdf"],
+                            data=st.session_state.pdf_bytes,
+                            file_name=f"Resume_{st.session_state.target_role.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            type="primary"
+                        )
+                    else:
+                        st.warning(t["pdf_fail"])
+
+                with col2:
+                    st.download_button(
+                        label=t["dl_json"],
+                        data=result['raw_markdown'],
+                        file_name=f"Resume_{st.session_state.target_role.replace(' ', '_')}_raw.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+                
+            st.markdown("---")
+            st.subheader(t["refine_hdr"])
+            st.info(t["refine_info"])
+            
+            for msg in st.session_state.messages:
+                st.chat_message(msg["role"]).write(msg["content"])
+            
+            if prompt := st.chat_input(t["refine_ph"]):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                st.chat_message("user").write(prompt)
+                
+                with st.spinner(t["refine_wait"]):
+                    try:
+                        model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+                        refine_prompt = f"""Update the following JSON resume based on the user request.
 USER REQUEST: {prompt}
 
 CURRENT RESUME JSON:
@@ -865,35 +1002,30 @@ CURRENT RESUME JSON:
 
 Return ONLY the updated valid JSON matching the exact same schema. Do not add markdown blocks or explanations."""
 
-                    res = model.generate_content(refine_prompt)
-                    raw_out = res.text
-                    
-                    if "```json" in raw_out:
-                        import re
-                        m = re.search(r'```json\s*(\{.*?\})\s*```', raw_out, re.DOTALL)
-                        if m: raw_out = m.group(1)
+                        res = model.generate_content(refine_prompt)
+                        raw_out = res.text
                         
-                    updated_json = json.loads(raw_out)
-                    
-                    st.session_state.result['tailored_resume'] = updated_json
-                    st.session_state.pdf_bytes = FpdfGenerator.generate_pdf(updated_json, theme_color_hex=theme_color)
-                    
-                    st.session_state.messages.append({"role": "assistant", "content": "I've updated your resume! Check the preview and download above."})
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to refine: {str(e)}")
-        
-        if st.button("🔄 New Resume", use_container_width=True):
-            st.session_state.analysis_complete = False
-            st.session_state.result = None
-            st.session_state.job_description = ""
-            st.session_state.pdf_bytes = None
-            st.session_state.latex_bytes = None
-            st.session_state.messages = []
-            st.rerun()
+                        if "```json" in raw_out:
+                            import re
+                            m = re.search(r'```json\s*(\{.*?\})\s*```', raw_out, re.DOTALL)
+                            if m: raw_out = m.group(1)
+                            
+                        updated_json = json.loads(raw_out)
+                        
+                        st.session_state.result['tailored_resume'] = updated_json
+                        st.session_state.pdf_bytes = FpdfGenerator.generate_pdf(updated_json, theme_color_hex=st.session_state.theme_color)
+                        
+                        st.session_state.messages.append({"role": "assistant", "content": t["refine_success"]})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"{t['refine_fail']} {str(e)}")
+            
+            if st.button(t["new_res"], use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
 
     st.markdown("---")
-    st.caption("🤖 AI-Powered Resume Intelligence. By Khalid Dharif")
+    st.caption(t["footer"])
 
 if __name__ == "__main__":
     main()
