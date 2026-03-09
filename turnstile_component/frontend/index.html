@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    #turnstile-widget {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="turnstile-widget"></div>
+
+  <script>
+    function sendMessageToStreamlitClient(type, data) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: type,
+        ...data
+      }, "*");
+    }
+
+    function onStreamlitRender(event) {
+      const data = event.data;
+      if (data.type === "streamlit:render") {
+        const sitekey = data.args.sitekey;
+        if (!window.widgetRendered) {
+          const renderWidget = () => {
+            if (typeof turnstile !== 'undefined') {
+              turnstile.render('#turnstile-widget', {
+                sitekey: sitekey,
+                callback: function (token) {
+                  sendMessageToStreamlitClient("streamlit:setComponentValue", { value: token });
+                }
+              });
+              window.widgetRendered = true;
+              sendMessageToStreamlitClient("streamlit:setFrameHeight", { height: 80 });
+            } else {
+              setTimeout(renderWidget, 100); // Wait for Cloudflare script to load
+            }
+          };
+          renderWidget();
+        } else {
+          // Request height from Streamlit to show widget
+          sendMessageToStreamlitClient("streamlit:setFrameHeight", { height: 80 });
+        }
+      }
+    }
+
+    window.addEventListener("message", onStreamlitRender);
+    sendMessageToStreamlitClient("streamlit:componentReady", { apiVersion: 1 });
+  </script>
+</body>
+
+</html>

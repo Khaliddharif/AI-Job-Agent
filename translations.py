@@ -70,6 +70,8 @@ UI_TEXT = {
         "refine_success": "I've updated your resume! Check the preview and download above.",
         "refine_fail": "Failed to refine:",
         "new_res": "🔄 New Resume",
+        "captcha_verify": "Please verify you are human to continue.",
+        "rate_limit": "Rate limit exceeded. You can generate a maximum of 10 resumes per 30 minutes. Please try again later.",
         "footer": "🤖 Powered with AI and Developed by Khalid DHARIF"
     },
     "French": {
@@ -143,6 +145,8 @@ UI_TEXT = {
         "refine_success": "CV mis à jour ! Vérifiez l'aperçu et téléchargez-le ci-dessus.",
         "refine_fail": "Échec de l'ajustement :",
         "new_res": "🔄 Nouveau CV",
+        "captcha_verify": "Veuillez vérifier que vous êtes humain pour continuer.",
+        "rate_limit": "Limite de requêtes atteinte. Vous pouvez générer un maximum de 10 CV par 30 minutes. Réessayez plus tard.",
         "footer": "🤖 Géré par l'IA et développé par Khalid DHARIF"
     },
     "Spanish": {

@@ -11,15 +11,21 @@ os.environ["CREWAI_TELEMETRY_ENABLED"] = "false"
 
 import json
 import re
+import time
 import streamlit as st
 import google.generativeai as genai
 from PyPDF2 import PdfReader
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 import logging
 import subprocess
 from translations import UI_TEXT
+
+# Turnstile support
+from turnstile_component import turnstile
+from groq import Groq
+
 
 # --- SECTION 1: SYSTEM INITIALIZATION ---
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +69,44 @@ def init_gemini():
     if api_key:
         genai.configure(api_key=api_key)
     return True
+
+@st.cache_resource
+def get_rate_limiter_store():
+    return {} # Maps IP/Session to list of timestamps
+
+def check_rate_limit(client_id: str, limit: int = 10, window_secs: int = 1800) -> bool:
+    store = get_rate_limiter_store()
+    now = time.time()
+    if client_id not in store:
+        store[client_id] = []
+    
+    # Remove old entries
+    store[client_id] = [t for t in store[client_id] if now - t < window_secs]
+    
+    if len(store[client_id]) >= limit:
+        return False
+    return True
+
+def add_rate_limit_usage(client_id: str):
+    store = get_rate_limiter_store()
+    if client_id not in store:
+         store[client_id] = []
+    store[client_id].append(time.time())
+
+def verify_turnstile(token: str) -> bool:
+    secret_key = st.secrets.get("TURNSTILE_SECRET_KEY", "")
+    if not secret_key:
+        return True # Fallback if secret is missing
+    try:
+        response = requests.post(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data={"secret": secret_key, "response": token},
+            timeout=5
+        )
+        return response.json().get("success", False)
+    except Exception as e:
+        logger.error(f"Turnstile verification failed: {str(e)}")
+        return False
 
 # --- SECTION 2: UTILITY FUNCTIONS ---
 class JobScraper:
@@ -417,22 +461,33 @@ class ResumeIntelligence:
             
             if progress_callback:
                 progress_callback("Analyzing resume match...")
-            try:
-                model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-                
-                kpi_prompt = f"""Analyze resume vs job:
+            
+            kpi_prompt = f"""Analyze resume vs job:
 
 RESUME: {self.resume_text[:3000]}
 JOB: {job_description[:2000]}
 ROLE: {target_role}
 
 Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"overall": 80, "content": 70, "ats": 60, "tailoring": 80}}"""
-                
+
+            # Try Gemini first, fallback to Groq
+            try:
+                model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
                 kpi_res = model.generate_content(kpi_prompt)
                 scores = self._parse_scores(kpi_res.text)
             except Exception as e:
-                logger.error(f"Failed to generate scores: {str(e)}")
-                scores = {"overall": 0, "content": 0, "ats": 0, "tailoring": 0}
+                logger.warning(f"Gemini KPI generation failed, falling back to Groq: {str(e)}")
+                if progress_callback: progress_callback("Gemini API overloaded. Switched to Backup LLM (Groq)...")
+                try:
+                    groq_client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
+                    chat_completion = groq_client.chat.completions.create(
+                        messages=[{"role": "user", "content": kpi_prompt}],
+                        model="llama3-70b-8192",
+                    )
+                    scores = self._parse_scores(chat_completion.choices[0].message.content)
+                except Exception as groq_e:
+                    logger.error(f"Groq fallback also failed: {str(groq_e)}")
+                    scores = {"overall": 0, "content": 0, "ats": 0, "tailoring": 0}
             
             if progress_callback:
                 progress_callback(f"Tailoring resume with native template constraints...")
@@ -520,9 +575,24 @@ Return valid JSON ONLY. Do not include markdown formatting or explanations outsi
             if progress_callback:
                 progress_callback("Processing with AI...")
             
-            model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-            tailor_res = model.generate_content(tailor_prompt)
-            raw_output = str(tailor_res.text)
+            # Primary: Gemini
+            raw_output = ""
+            try:
+                model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+                tailor_res = model.generate_content(tailor_prompt)
+                raw_output = str(tailor_res.text)
+            except Exception as e:
+                logger.error(f"Gemini Tailoring failed: {str(e)}")
+                if progress_callback: progress_callback("Gemini API overloaded. Switched to Backup LLM (Groq) to craft resume...")
+                try:
+                    groq_client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
+                    chat_completion = groq_client.chat.completions.create(
+                        messages=[{"role": "user", "content": tailor_prompt}],
+                        model="llama3-70b-8192",
+                    )
+                    raw_output = str(chat_completion.choices[0].message.content)
+                except Exception as groq_e:
+                    raise ValueError(f"Both Primary and Backup AI Models failed. Please try again later. Error: {str(groq_e)}")
             
             if "```json" in raw_output:
                 json_match = re.search(r'```json\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
@@ -578,7 +648,6 @@ def init_session_state():
     if 'current_step' not in st.session_state:
         st.session_state.current_step = 1
     
-    # Store persistent inputs
     if 'uploaded_file' not in st.session_state:
         st.session_state.uploaded_file = None
     if 'theme_color' not in st.session_state:
@@ -593,6 +662,12 @@ def init_session_state():
         st.session_state.verbosity_level = "Compact"
     if 'app_lang' not in st.session_state:
         st.session_state.app_lang = "English"
+
+    # Identify client for rate limiting
+    if 'client_id' not in st.session_state:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx()
+        st.session_state.client_id = ctx.session_id if ctx else "unknown_session"
 
 def next_step():
     st.session_state.current_step += 1
@@ -796,11 +871,24 @@ def main():
             st.write(f"**Verbosity:** {st.session_state.verbosity_level}")
         with col2:
             st.markdown("### Job Summary")
-            st.write(f"**Job Description Length:** {len(st.session_state.job_description)} {t['chars']}")
+            st.write(f"**Job Description Length:** {len(st.session_state.job_description)} {t.get('chars', 'characters')}")
             st.write(f"**Priority Keywords:** {st.session_state.custom_skills if st.session_state.custom_skills else 'None specified'}")
             
         st.markdown("---")
         
+        # RATE LIMIT CHECK
+        can_generate = check_rate_limit(st.session_state.client_id, limit=10, window_secs=1800)
+        
+        if not can_generate:
+            st.error(t.get("rate_limit", "Rate limit exceeded. You can generate a maximum of 10 resumes per 30 minutes."))
+        else:
+            # CAPTCHA
+            site_key = st.secrets.get("TURNSTILE_SITE_KEY", "")
+            turnstile_token = None
+            if site_key:
+                st.markdown(f"**{t.get('captcha_verify', 'Please verify you are human to continue.')}**")
+                turnstile_token = turnstile(sitekey=site_key)
+
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button(t["prev_step"], use_container_width=True):
@@ -808,11 +896,17 @@ def main():
                 st.rerun()
                 
         with col2:
+            btn_disabled = not can_generate or (bool(st.secrets.get("TURNSTILE_SITE_KEY", "")) and not turnstile_token)
+            
             if st.button(
                 t["gen_btn"],  
                 type="primary", 
-                use_container_width=True
+                use_container_width=True,
+                disabled=btn_disabled
             ):
+                if turnstile_token and not verify_turnstile(turnstile_token):
+                    st.error("❌ CAPTCHA verification failed. Please try again.")
+                    return
                 is_valid, error_msg = InputValidator.validate_pdf(st.session_state.uploaded_file)
                 if not is_valid:
                     st.error(f"❌ {error_msg}")
@@ -848,6 +942,7 @@ def main():
                     )
                     
                     if result['success']:
+                        add_rate_limit_usage(st.session_state.client_id)
                         st.session_state.result = result
                         st.session_state.analysis_complete = True
                         status_placeholder.success("✅ AI Analysis Complete!")
