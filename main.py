@@ -1033,10 +1033,21 @@ def main():
             
             with tab1:
                 if 'pdf_bytes' in st.session_state and st.session_state.pdf_bytes:
-                    import base64
-                    base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
-                    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
-                    st.markdown(pdf_display, unsafe_allow_html=True)
+                    try:
+                        import pypdfium2 as pdfium
+                        pdf = pdfium.PdfDocument(st.session_state.pdf_bytes)
+                        page = pdf[0]
+                        # Use scale=2 for better resolution
+                        pil_image = page.render(scale=2).to_pil()
+                        st.image(pil_image, caption=t.get("pdf_preview_caption", "Preview of Page 1 (Download full PDF below)"), use_container_width=True)
+                    except Exception as e:
+                        logger.error(f"Failed to render PDF preview with pypdfium2: {str(e)}")
+                        # Fallback to the old iframe method if pypdfium2 fails
+                        import base64
+                        base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
+                        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+                        st.markdown(pdf_display, unsafe_allow_html=True)
+                        st.caption("Note: PDF preview iframe might be blocked by some browsers due to security policies.")
                 else:
                     st.info(t["pdf_unavail"])
                     
