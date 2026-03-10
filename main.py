@@ -562,7 +562,7 @@ Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"ov
                     groq_client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": kpi_prompt}],
-                        model="llama3-70b-8192",
+                        model="llama-3.3-70b-versatile",
                     )
                     scores = self._parse_scores(chat_completion.choices[0].message.content)
                 except Exception as groq_e:
@@ -668,7 +668,7 @@ Return valid JSON ONLY. Do not include markdown formatting or explanations outsi
                     groq_client = Groq(api_key=st.secrets.get("GROQ_API_KEY", ""))
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": tailor_prompt}],
-                        model="llama3-70b-8192",
+                        model="llama-3.3-70b-versatile",
                     )
                     raw_output = str(chat_completion.choices[0].message.content)
                 except Exception as groq_e:
