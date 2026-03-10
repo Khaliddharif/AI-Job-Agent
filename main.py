@@ -196,6 +196,10 @@ class FpdfGenerator:
             if not text: return ""
             # Strip problematic markdown formatting if any lingered
             text = text.replace('**', '').replace('__', '')
+            # Strip extracted Wingdings arrows and generic bullet point symbols
+            for char in ['\uf0d8', '\uf0b7', '\u2022', '\u00b7', '\u25aa', '\u25e6', '\uf0a7', '', '', '•', '·']:
+                text = text.replace(char, '')
+            text = text.strip()
             return text.encode('latin-1', 'replace').decode('latin-1')
 
         pdf = FPDF()
@@ -409,27 +413,20 @@ class FpdfGenerator:
             pdf.set_text_color(0, 0, 0)
             pdf.ln(1)
             
-            edu_grouped = {}
             for edu in education:
+                degree = safe_text(edu.get("degree", ""))
                 inst = safe_text(edu.get("institution", ""))
-                if inst not in edu_grouped:
-                    edu_grouped[inst] = []
-                edu_grouped[inst].append(edu)
+                dates = safe_text(edu.get("dates", ""))
                 
-            for inst, degrees in edu_grouped.items():
-                for edu in degrees:
-                    degree = safe_text(edu.get("degree", ""))
-                    dates = safe_text(edu.get("dates", ""))
-                    
-                    current_y = pdf.get_y()
-                    pdf.set_font("helvetica", '', 9)
-                    pdf.set_xy(pdf.w - pdf.r_margin - 60, current_y)
-                    pdf.cell(60, 5, dates, align='R', new_x=XPos.LMARGIN, new_y=YPos.TOP)
-                    
-                    pdf.set_xy(pdf.l_margin, current_y)
-                    pdf.set_font("helvetica", 'B', 9.5)
-                    pdf.multi_cell(pdf.epw - 65, 5, degree, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-                    
+                current_y = pdf.get_y()
+                pdf.set_font("helvetica", '', 9)
+                pdf.set_xy(pdf.w - pdf.r_margin - 60, current_y)
+                pdf.cell(60, 5, dates, align='R', new_x=XPos.LMARGIN, new_y=YPos.TOP)
+                
+                pdf.set_xy(pdf.l_margin, current_y)
+                pdf.set_font("helvetica", 'B', 9.5)
+                pdf.multi_cell(pdf.epw - 65, 5, degree, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                
                 if inst:
                     pdf.set_font("helvetica", 'I', 9)
                     pdf.multi_cell(0, 5, inst, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
