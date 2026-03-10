@@ -552,7 +552,7 @@ Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"ov
                 model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
                 kpi_res = model.generate_content(
                     kpi_prompt,
-                    request_options={"timeout": 15}
+                    request_options={"timeout": 5}
                 )
                 scores = self._parse_scores(kpi_res.text)
             except Exception as e:
@@ -660,7 +660,10 @@ Return valid JSON ONLY. Do not include markdown formatting or explanations outsi
             raw_output = ""
             try:
                 model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-                tailor_res = model.generate_content(tailor_prompt)
+                tailor_res = model.generate_content(
+                    tailor_prompt,
+                    request_options={"timeout": 25}
+                )
                 raw_output = str(tailor_res.text)
             except Exception as e:
                 logger.error(f"Gemini Tailoring failed: {str(e)}")
