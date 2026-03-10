@@ -210,8 +210,8 @@ class FpdfGenerator:
         text_x_start = pdf.l_margin
         text_align = 'C'
         
-        image_w = 35 # 35 mm
-        image_h = 45 # 45 mm
+        image_w = 25 # 25 mm
+        image_h = 30 # 30 mm
         
         if profile_photo_bytes:
             # --- Image Processing: Crop and Round Corners ---
@@ -219,7 +219,7 @@ class FpdfGenerator:
                 from PIL import Image, ImageDraw
                 img = Image.open(io.BytesIO(profile_photo_bytes)).convert("RGBA")
                 
-                # Target Aspect Ratio 35:45 (7:9)
+                # Target Aspect Ratio 25:30 (5:6)
                 target_ratio = image_w / image_h
                 w, h = img.size
                 current_ratio = w / h
@@ -235,10 +235,10 @@ class FpdfGenerator:
                     img = img.crop((0, offset, w, h - offset))
                     
                 # Resize for crisp resolution in PDF
-                img = img.resize((350, 450), Image.Resampling.LANCZOS)
+                img = img.resize((250, 300), Image.Resampling.LANCZOS)
                 
                 # Apply Anti-aliased Rounded Corners
-                radius = 40
+                radius = 35
                 mask = Image.new('L', img.size, 0)
                 draw = ImageDraw.Draw(mask)
                 draw.rounded_rectangle((0, 0, img.size[0], img.size[1]), radius=radius, fill=255)
