@@ -612,7 +612,8 @@ NON-TECHNICAL / DOMAIN: Integrate them naturally into the EXPERIENCE bullet poin
 EXPERIENCE SECTION: Refine bullet points to reflect achievements aligned with the Job Description. Use action verbs and measurable impact. Ensure each bullet includes relevant keywords from the JD.
 ATS OPTIMIZATION: Maintain a clean ATS-friendly structure. Ensure keyword density without keyword stuffing.
 CONSISTENCY: Preserve truthful experience and do not fabricate roles or companies. Improve clarity, grammar, and professional tone.
-FORMATTING: {bullet_instruction} Use exactly MM/YYYY - MM/YYYY format for all dates. Write ENTIRELY in {language}. 
+FORMATTING: {bullet_instruction} Use exactly MM/YYYY - MM/YYYY format for all dates. Write ENTIRELY in {language}.
+EDUCATION SECTION: You MUST extract the full, exact name of the degree/diploma, including any specializations or majors (e.g. never abbreviate "Master 2 : Finance" to just "Master 2"). 
 CRITICAL: Count the exact number of bullets for each experience block in the original resume. You MUST output the EXACT SAME NUMBER of bullets for that block in the generated JSON. Do NOT summarize 4 bullets into 2. Output 4 bullets.
 
 OUTPUT FORMAT:
@@ -637,7 +638,7 @@ Return ONLY valid JSON. Your response must match this schema exactly:
     }}
   ],
   "education": [
-    {{ "degree": "Degree", "institution": "University", "dates": "MM/YYYY - MM/YYYY" }}
+    {{ "degree": "Full Degree Name with Specialization", "institution": "University", "dates": "MM/YYYY - MM/YYYY" }}
   ],
   "certifications": ["Cert 1 - Org 1", "Cert 2 - Org 2"],
   "hobbies": ["Hobby 1", "Hobby 2"],
