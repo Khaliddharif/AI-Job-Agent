@@ -209,15 +209,56 @@ class FpdfGenerator:
         
         text_x_start = pdf.l_margin
         text_align = 'C'
-        image_size = 30 # 30x30 mm
+        
+        image_w = 35 # 35 mm
+        image_h = 45 # 45 mm
         
         if profile_photo_bytes:
-            img_io = io.BytesIO(profile_photo_bytes)
-            # Add image to top left
-            pdf.image(img_io, x=pdf.l_margin, y=pdf.t_margin, w=image_size, h=image_size)
-            # Offset text over and align left
-            text_x_start = pdf.l_margin + image_size + 5
-            text_align = 'L'
+            # --- Image Processing: Crop and Round Corners ---
+            try:
+                from PIL import Image, ImageDraw
+                img = Image.open(io.BytesIO(profile_photo_bytes)).convert("RGBA")
+                
+                # Target Aspect Ratio 35:45 (7:9)
+                target_ratio = image_w / image_h
+                w, h = img.size
+                current_ratio = w / h
+                
+                # Center Crop
+                if current_ratio > target_ratio:
+                    new_w = int(target_ratio * h)
+                    offset = (w - new_w) // 2
+                    img = img.crop((offset, 0, w - offset, h))
+                elif current_ratio < target_ratio:
+                    new_h = int(w / target_ratio)
+                    offset = (h - new_h) // 2
+                    img = img.crop((0, offset, w, h - offset))
+                    
+                # Resize for crisp resolution in PDF
+                img = img.resize((350, 450), Image.Resampling.LANCZOS)
+                
+                # Apply Anti-aliased Rounded Corners
+                radius = 40
+                mask = Image.new('L', img.size, 0)
+                draw = ImageDraw.Draw(mask)
+                draw.rounded_rectangle((0, 0, img.size[0], img.size[1]), radius=radius, fill=255)
+                
+                img.putalpha(mask)
+                
+                # Save to IO
+                rounded_io = io.BytesIO()
+                img.save(rounded_io, format='PNG')
+                rounded_io.seek(0)
+                
+                # Add image to top left
+                pdf.image(rounded_io, x=pdf.l_margin, y=pdf.t_margin, w=image_w, h=image_h)
+                
+                # Offset text over and align left
+                text_x_start = pdf.l_margin + image_w + 5
+                text_align = 'L'
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to process profile photo: {e}")
             
         pdf.set_y(pdf.t_margin)
         pdf.set_font("helvetica", '', 14)
