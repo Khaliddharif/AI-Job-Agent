@@ -234,8 +234,11 @@ class FpdfGenerator:
                     offset = (h - new_h) // 2
                     img = img.crop((0, offset, w, h - offset))
                     
+                # Fast downscale first to prevent LANCZOS from freezing on massive camera images
+                img.thumbnail((800, 800))
+                
                 # Resize for crisp resolution in PDF
-                img = img.resize((250, 300), Image.Resampling.LANCZOS)
+                img = img.resize((250, 300), Image.Resampling.BILINEAR)
                 
                 # Apply Anti-aliased Rounded Corners
                 radius = 35
@@ -247,7 +250,8 @@ class FpdfGenerator:
                 
                 # Save to IO
                 rounded_io = io.BytesIO()
-                img.save(rounded_io, format='PNG')
+                rounded_io.name = "profile_photo.png"
+                img.save(rounded_io, format='PNG', optimize=False)
                 rounded_io.seek(0)
                 
                 # Add image to top left
@@ -814,14 +818,6 @@ def main():
                 uploaded_file = st.session_state.uploaded_file
                 
             st.markdown("---")
-            st.subheader(t["styling"])
-            st.session_state.theme_color = st.color_picker(
-                t["color_picker"], 
-                value=st.session_state.theme_color, 
-                help=t["color_help"]
-            )
-            
-            st.markdown("---")
             photo_choice = st.radio(
                 t.get("photo_toggle", "Include Profile Photo?"),
                 [t.get("photo_no", "No photo"), t.get("photo_yes", "Yes, with photo")],
@@ -843,6 +839,14 @@ def main():
                     st.success("✓ Image previously uploaded")
             else:
                 st.session_state.profile_photo = None
+                
+            st.markdown("---")
+            st.subheader(t["styling"])
+            st.session_state.theme_color = st.color_picker(
+                t["color_picker"], 
+                value=st.session_state.theme_color, 
+                help=t["color_help"]
+            )
             
         with col2:
             st.subheader(t["role_details"])
