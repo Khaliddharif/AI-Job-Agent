@@ -822,10 +822,11 @@ def main():
                 t.get("photo_toggle", "Include Profile Photo?"),
                 [t.get("photo_no", "No photo"), t.get("photo_yes", "Yes, with photo")],
                 index=1 if st.session_state.include_photo else 0,
-                horizontal=True
+                horizontal=True,
+                key="photo_radio_widget"
             )
             
-            st.session_state.include_photo = (photo_choice == t.get("photo_yes", "Yes, with photo"))
+            st.session_state.include_photo = (st.session_state.photo_radio_widget == t.get("photo_yes", "Yes, with photo"))
             
             if st.session_state.include_photo:
                 uploaded_photo = st.file_uploader(
