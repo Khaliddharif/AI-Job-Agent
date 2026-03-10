@@ -481,7 +481,7 @@ class ResumeIntelligence:
             if hasattr(file, 'seek'):
                 file.seek(0)
                 
-            from pypdf import PdfReader
+            from PyPDF2 import PdfReader
             reader = PdfReader(file)
             if len(reader.pages) == 0:
                 raise ValueError("PDF file appears to be empty")
