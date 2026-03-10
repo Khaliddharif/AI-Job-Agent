@@ -563,6 +563,7 @@ Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"ov
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": kpi_prompt}],
                         model="llama-3.3-70b-versatile",
+                        response_format={"type": "json_object"}
                     )
                     scores = self._parse_scores(chat_completion.choices[0].message.content)
                 except Exception as groq_e:
@@ -669,15 +670,16 @@ Return valid JSON ONLY. Do not include markdown formatting or explanations outsi
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": tailor_prompt}],
                         model="llama-3.3-70b-versatile",
+                        response_format={"type": "json_object"}
                     )
                     raw_output = str(chat_completion.choices[0].message.content)
                 except Exception as groq_e:
                     raise ValueError(f"Both Primary and Backup AI Models failed. Please try again later. Error: {str(groq_e)}")
             
-            if "```json" in raw_output:
-                json_match = re.search(r'```json\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
-                if json_match:
-                    raw_output = json_match.group(1)
+            raw_output = raw_output.strip()
+            if raw_output.startswith("```"):
+                raw_output = re.sub(r'^```(?:json)?\s*', '', raw_output)
+                raw_output = re.sub(r'\s*```$', '', raw_output)
             
             try:
                 final_json = json.loads(raw_output)
