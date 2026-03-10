@@ -821,6 +821,29 @@ def main():
                 help=t["color_help"]
             )
             
+            st.markdown("---")
+            photo_choice = st.radio(
+                t.get("photo_toggle", "Include Profile Photo?"),
+                [t.get("photo_no", "No photo"), t.get("photo_yes", "Yes, with photo")],
+                index=1 if st.session_state.include_photo else 0,
+                horizontal=True
+            )
+            
+            st.session_state.include_photo = (photo_choice == t.get("photo_yes", "Yes, with photo"))
+            
+            if st.session_state.include_photo:
+                uploaded_photo = st.file_uploader(
+                    t.get("photo_label", "Upload Profile Photo"),
+                    type=["png", "jpg", "jpeg"]
+                )
+                if uploaded_photo:
+                    st.session_state.profile_photo = uploaded_photo
+                    st.success("✓ Image uploaded")
+                elif st.session_state.profile_photo is not None:
+                    st.success("✓ Image previously uploaded")
+            else:
+                st.session_state.profile_photo = None
+            
         with col2:
             st.subheader(t["role_details"])
             
@@ -861,29 +884,6 @@ def main():
                 options=["Compact", "Medium", "Detailed"],
                 index=["Compact", "Medium", "Detailed"].index(st.session_state.verbosity_level)
             )
-            
-            st.markdown("---")
-            photo_choice = st.radio(
-                t.get("photo_toggle", "Include Profile Photo?"),
-                [t.get("photo_no", "No photo"), t.get("photo_yes", "Yes, with photo")],
-                index=1 if st.session_state.include_photo else 0,
-                horizontal=True
-            )
-            
-            st.session_state.include_photo = (photo_choice == t.get("photo_yes", "Yes, with photo"))
-            
-            if st.session_state.include_photo:
-                uploaded_photo = st.file_uploader(
-                    t.get("photo_label", "Upload Profile Photo"),
-                    type=["png", "jpg", "jpeg"]
-                )
-                if uploaded_photo:
-                    st.session_state.profile_photo = uploaded_photo
-                    st.success("✓ Image uploaded")
-                elif st.session_state.profile_photo is not None:
-                    st.success("✓ Image previously uploaded")
-            else:
-                st.session_state.profile_photo = None
             
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 1, 1])
