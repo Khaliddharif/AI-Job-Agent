@@ -319,7 +319,7 @@ class FpdfGenerator:
         # Ensure we don't start the summary block over the image if the header text is short!
         if profile_photo_bytes:
             current_y = pdf.get_y()
-            min_y = pdf.t_margin + image_size + 2
+            min_y = pdf.t_margin + image_h + 2
             if current_y < min_y:
                 pdf.set_y(min_y)
                 
