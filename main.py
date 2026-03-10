@@ -477,6 +477,11 @@ class ResumeIntelligence:
     
     def _read_pdf(self, file) -> str:
         try:
+            # Crucial: Reset pointer if file was read in previous UI states or generations
+            if hasattr(file, 'seek'):
+                file.seek(0)
+                
+            from pypdf import PdfReader
             reader = PdfReader(file)
             if len(reader.pages) == 0:
                 raise ValueError("PDF file appears to be empty")
@@ -545,7 +550,10 @@ Score (0-100): overall, content, ats, tailoring. Return JSON exactly like: {{"ov
             # Try Gemini first, fallback to Groq
             try:
                 model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-                kpi_res = model.generate_content(kpi_prompt)
+                kpi_res = model.generate_content(
+                    kpi_prompt,
+                    request_options={"timeout": 15}
+                )
                 scores = self._parse_scores(kpi_res.text)
             except Exception as e:
                 logger.warning(f"Gemini KPI generation failed, falling back to Groq: {str(e)}")
