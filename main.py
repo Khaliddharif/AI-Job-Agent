@@ -177,9 +177,10 @@ class FpdfGenerator:
     """Generates professional 1-column ATS-friendly CV documents using FPDF2"""
     
     @staticmethod
-    def generate_pdf(json_data: dict, theme_color_hex: str = "#2C3E50") -> bytes:
+    def generate_pdf(json_data: dict, theme_color_hex: str = "#2C3E50", profile_photo_bytes: bytes = None) -> bytes:
         from fpdf import FPDF
         from fpdf.enums import XPos, YPos
+        import io
 
         def hex_to_rgb(hex_code: str):
             hex_code = hex_code.lstrip('#')
@@ -206,14 +207,29 @@ class FpdfGenerator:
         name = safe_text(json_data.get("name", "Name"))
         title = safe_text(json_data.get("title", ""))
         
+        text_x_start = pdf.l_margin
+        text_align = 'C'
+        image_size = 30 # 30x30 mm
+        
+        if profile_photo_bytes:
+            img_io = io.BytesIO(profile_photo_bytes)
+            # Add image to top left
+            pdf.image(img_io, x=pdf.l_margin, y=pdf.t_margin, w=image_size, h=image_size)
+            # Offset text over and align left
+            text_x_start = pdf.l_margin + image_size + 5
+            text_align = 'L'
+            
+        pdf.set_y(pdf.t_margin)
         pdf.set_font("helvetica", '', 14)
         pdf.set_text_color(127, 140, 141)
-        pdf.cell(0, 8, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+        pdf.set_x(text_x_start)
+        pdf.cell(0, 8, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=text_align)
         
         if title:
             pdf.set_font("helvetica", 'B', 22)
             pdf.set_text_color(*theme_rgb)
-            pdf.cell(0, 10, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            pdf.set_x(text_x_start)
+            pdf.cell(0, 10, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=text_align)
             
         pdf.set_text_color(0, 0, 0)
         
@@ -225,7 +241,8 @@ class FpdfGenerator:
         ]))
         if contact_str:
             pdf.set_font("helvetica", '', 9)
-            pdf.cell(0, 5, contact_str, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            pdf.set_x(text_x_start)
+            pdf.cell(0, 5, contact_str, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align=text_align)
             
         linkedin_url = json_data.get("contact", {}).get("linkedin", "")
         github_url = json_data.get("contact", {}).get("github", "")
@@ -237,10 +254,13 @@ class FpdfGenerator:
         if socials:
             pdf.set_font("helvetica", '', 9)
             
-            # Center the row manually by measuring total text width
-            total_width = sum(pdf.get_string_width(s[0]) for s in socials) + (len(socials) - 1) * pdf.get_string_width(" | ")
-            start_x = (pdf.w - total_width) / 2
-            pdf.set_x(start_x)
+            if profile_photo_bytes:
+                pdf.set_x(text_x_start)
+            else:
+                # Center the row manually by measuring total text width
+                total_width = sum(pdf.get_string_width(s[0]) for s in socials) + (len(socials) - 1) * pdf.get_string_width(" | ")
+                start_x = (pdf.w - total_width) / 2
+                pdf.set_x(start_x)
             
             for i, (label, url) in enumerate(socials):
                 pdf.set_text_color(0, 0, 255) # Blue links
@@ -255,6 +275,13 @@ class FpdfGenerator:
                     
             pdf.ln(5)
             
+        # Ensure we don't start the summary block over the image if the header text is short!
+        if profile_photo_bytes:
+            current_y = pdf.get_y()
+            min_y = pdf.t_margin + image_size + 2
+            if current_y < min_y:
+                pdf.set_y(min_y)
+                
         pdf.ln(3)  # Reduced from 8
         
         headers = json_data.get("section_headers", {})
@@ -662,6 +689,10 @@ def init_session_state():
         st.session_state.verbosity_level = "Compact"
     if 'app_lang' not in st.session_state:
         st.session_state.app_lang = "English"
+    if 'include_photo' not in st.session_state:
+        st.session_state.include_photo = False
+    if 'profile_photo' not in st.session_state:
+        st.session_state.profile_photo = None
 
     # Identify client for rate limiting
     if 'client_id' not in st.session_state:
@@ -790,12 +821,37 @@ def main():
                 index=["Compact", "Medium", "Detailed"].index(st.session_state.verbosity_level)
             )
             
+            st.markdown("---")
+            photo_choice = st.radio(
+                t.get("photo_toggle", "Include Profile Photo?"),
+                [t.get("photo_no", "No photo"), t.get("photo_yes", "Yes, with photo")],
+                index=1 if st.session_state.include_photo else 0,
+                horizontal=True
+            )
+            
+            st.session_state.include_photo = (photo_choice == t.get("photo_yes", "Yes, with photo"))
+            
+            if st.session_state.include_photo:
+                uploaded_photo = st.file_uploader(
+                    t.get("photo_label", "Upload Profile Photo"),
+                    type=["png", "jpg", "jpeg"]
+                )
+                if uploaded_photo:
+                    st.session_state.profile_photo = uploaded_photo
+                    st.success("✓ Image uploaded")
+                elif st.session_state.profile_photo is not None:
+                    st.success("✓ Image previously uploaded")
+            else:
+                st.session_state.profile_photo = None
+            
         st.markdown("---")
         col1, col2, col3 = st.columns([1, 1, 1])
         with col3:
             if st.button(t["next_step"], use_container_width=True, type="primary"):
                 if not st.session_state.uploaded_file:
                     st.error(t["err_no_resume"])
+                elif st.session_state.include_photo and not st.session_state.profile_photo:
+                    st.error(t.get("err_no_photo", "Please upload a profile photo or select 'No photo'."))
                 elif not st.session_state.target_role:
                     st.error(t["err_no_role"])
                 else:
@@ -949,7 +1005,15 @@ def main():
                         
                         with st.spinner("Compiling Professional PDF..."):
                             try:
-                                pdf_bytes = FpdfGenerator.generate_pdf(result['tailored_resume'], theme_color_hex=st.session_state.theme_color)
+                                photo_args = {}
+                                if st.session_state.get('include_photo') and st.session_state.get('profile_photo'):
+                                    photo_args['profile_photo_bytes'] = st.session_state.profile_photo.getvalue()
+                                    
+                                pdf_bytes = FpdfGenerator.generate_pdf(
+                                    result['tailored_resume'], 
+                                    theme_color_hex=st.session_state.theme_color,
+                                    **photo_args
+                                )
                                 if pdf_bytes:
                                     st.session_state.pdf_bytes = pdf_bytes
                                     st.success("✅ PDF generated instantly!")
